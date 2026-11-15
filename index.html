@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troll Adventure 2.0</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;
+ background:#10182b;
+ color:white;
+ font-family:Arial;
+ text-align:center;
+}
+h2{margin:12px}
+#info{
+ background:#202e49;
+ padding:10px;
+ margin:8px;
+ border-radius:12px;
+}
+canvas{
+ display:block;
+ width:100%;
+ max-width:850px;
+ margin:auto;
+ border:3px solid #fff;
+ border-radius:12px;
+ background:#75dfff;
+ touch-action:none;
+}
+.controls{
+ display:flex;
+ justify-content:center;
+ gap:18px;
+ margin:15px;
+}
+button{
+ border:0;
+ border-radius:15px;
+ padding:17px 25px;
+ background:#ffca36;
+ font-size:25px;
+ font-weight:bold;
+ touch-action:none;
+}
+button:active{background:#ff8b24}
+#sound{
+ font-size:15px;
+ padding:10px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>🍄 TROLL ADVENTURE 2.0</h2>
+
+<div id="info">LEVEL 1 | ❤️ 3 | 🪙 0</div>
+
+<canvas id="game" width="850" height="430"></canvas>
+
+<button id="sound">🔊 SUARA: ON</button>
+
+<div class="controls">
+<button id="left">⬅️</button>
+<button id="jump">⬆️</button>
+<button id="right">➡️</button>
+</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+let level=1,lives=3,score=0;
+let camera=0,world=0;
+let keys={};
+let gameOver=false;
+let soundOn=true;
+let audio;
+
+const player={
+ x:50,y:300,w:30,h:42,
+ vx:0,vy:0,ground:false
+};
+
+let platforms=[];
+let traps=[];
+let coins=[];
+let goal=0;
+let particles=[];
+
+function audioStart(){
+ if(!audio){
+  audio=new (window.AudioContext||window.webkitAudioContext)();
+ }
+ if(audio.state==="suspended")audio.resume();
+}
+
+function beep(freq,duration,type="sine",volume=.08){
+ if(!soundOn)return;
+ audioStart();
+ const osc=audio.createOscillator();
+ const gain=audio.createGain();
+ osc.type=type;
+ osc.frequency.value=freq;
+ gain.gain.value=volume;
+ osc.connect(gain);
+ gain.connect(audio.destination);
+ osc.start();
+ gain.gain.exponentialRampToValueAtTime(
+  .001,audio.currentTime+duration
+ );
+ osc.stop(audio.currentTime+duration);
+}
+
+function music(){
+ if(!soundOn)return;
+ beep(523,.12);
+ setTimeout(()=>beep(659,.12),150);
+}
+
+function makeLevel(){
+ platforms=[];
+ traps=[];
+ coins=[];
+ particles=[];
+ camera=0;
+ gameOver=false;
+
+ player.x=50;
+ player.y=300;
+ player.vx=0;
+ player.vy=0;
+
+ world=1900+level*160;
+ goal=world-100;
+
+ platforms.push({
+  x:0,y:370,w:world,h:60
+ });
+
+ for(let x=240;x<goal-100;x+=160){
+
+  let y=290-Math.random()*90;
+
+  platforms.push({
+   x,y,w:90,h:18,
+   troll:Math.random()<Math.min(.2+level*.025,.65),
+   used:false
+  });
+
+  if(Math.random()<.55){
+   traps.push({
+    x:x+100,
+    y:342,
+    w:30,
+    h:28,
+    type:"spike"
+   });
+  }
+
+  if(Math.random()<.30){
+   traps.push({
+    x:x+40,
+    y:y-35,
+    w:28,
+    h:35,
+    type:"hidden",
+    active:false
+   });
+  }
+
+  if(Math.random()<.35){
+   coins.push({x:x+40,y:y-40,taken:false});
+  }
+ }
+
+ // Tangga menuju garis akhir
+ platforms.push({
+  x:goal-80,y:320,w:100,h:20
+ });
+}
+
+function collide(a,b){
+ return a.x<b.x+b.w &&
+ a.x+a.w>b.x &&
+ a.y<b.y+b.h &&
+ a.y+a.h>b.y;
+}
+
+function particle(x,y,color){
+ for(let i=0;i<8;i++){
+  particles.push({
+   x,y,
+   vx:(Math.random()-.5)*6,
+   vy:(Math.random()-.5)*6,
+   life:30,
+   color
+  });
+ }
+}
+
+function die(){
+ if(gameOver)return;
+ gameOver=true;
+
+ beep(150,.5,"sawtooth");
+ particle(player.x,player.y,"red");
+
+ lives--;
+
+ setTimeout(()=>{
+  if(lives<=0){
+   alert("GAME OVER! 😂\nLevel terakhir: "+level);
+   level=1;
+   lives=3;
+   score=0;
+  }
+  makeLevel();
+ },450);
+}
+
+function nextLevel(){
+ gameOver=true;
+ beep(700,.2);
+ setTimeout(()=>beep(900,.3),150);
+
+ level++;
+
+ if(level>20){
+  alert("🏆 KAMU MENANG!\nSemua 20 level berhasil diselesaikan!");
+  level=1;
+  lives=3;
+  score=0;
+ }
+ makeLevel();
+}
+
+function update(){
+
+ if(gameOver)return;
+
+ // Gerakan
+ if(keys.left)player.vx=-4.5;
+ else if(keys.right)player.vx=4.5;
+ else player.vx*=.78;
+
+ if(keys.jump&&player.ground){
+  player.vy=-12;
+  player.ground=false;
+  beep(420,.12);
+ }
+
+ player.vy+=.55;
+ if(player.vy>13)player.vy=13;
+
+ player.x+=player.vx;
+ player.y+=player.vy;
+
+ if(player.x<0)player.x=0;
+
+ player.ground=false;
+
+ // Platform
+ for(let p of platforms){
+
+  if(collide(player,p)&&player.vy>=0){
+
+   if(player.y+player.h-player.vy<=p.y+10){
+
+    player.y=p.y-player.h;
+    player.vy=0;
+    player.ground=true;
+
+    if(p.troll&&!p.used){
+     p.used=true;
+     setTimeout(()=>{
+      p.y+=140;
+     },150);
+    }
+   }
+  }
+ }
+
+ // Jebakan
+ for(let t of traps){
+  if(collide(player,t)){
+   die();
+   return;
+  }
+ }
+
+ // Koin
+ for(let coin of coins){
+  if(!coin.taken){
+   let box={x:coin.x-9,y:coin.y-9,w:18,h:18};
+   if(collide(player,box)){
+    coin.taken=true;
+    score++;
+    beep(950,.12);
+    particle(coin.x,coin.y,"gold");
+   }
+  }
+ }
+
+ if(player.y>460){
+  die();
+  return;
+ }
+
+ if(player.x>=goal){
+  nextLevel();
+ }
+
+ camera=Math.max(0,player.x-350);
+
+ for(let p of particles){
+  p.x+=p.vx;
+  p.y+=p.vy;
+  p.life--;
+ }
+ particles=particles.filter(p=>p.life>0);
+
+ document.getElementById("info").innerText=
+ "LEVEL "+level+" | ❤️ "+lives+" | 🪙 "+score;
+}
+
+// Background
+function background(){
+
+ let sky=ctx.createLinearGradient(0,0,0,430);
+ sky.addColorStop(0,"#48bdf7");
+ sky.addColorStop(1,"#c7f5ff");
+
+ ctx.fillStyle=sky;
+ ctx.fillRect(0,0,850,430);
+
+ // Matahari
+ ctx.fillStyle="#fff5a5";
+ ctx.beginPath();
+ ctx.arc(700,75,42,0,Math.PI*2);
+ ctx.fill();
+
+ // Gunung
+ ctx.fillStyle="#79c99b";
+
+ for(let i=0;i<6;i++){
+  let x=i*220-(camera*.2)%220;
+
+  ctx.beginPath();
+  ctx.moveTo(x,370);
+  ctx.lineTo(x+110,140);
+  ctx.lineTo(x+220,370);
+  ctx.fill();
+ }
+
+ // Awan
+ ctx.fillStyle="white";
+
+ for(let i=0;i<8;i++){
+  let x=(i*180-camera*.35)%1000;
+  if(x<0)x+=1000;
+
+  ctx.beginPath();
+  ctx.arc(x,90,22,0,Math.PI*2);
+  ctx.arc(x+25,80,28,0,Math.PI*2);
+  ctx.arc(x+55,95,20,0,Math.PI*2);
+  ctx.fill();
+ }
+}
+
+function draw(){
+
+ background();
+
+ ctx.save();
+ ctx.translate(-camera,0);
+
+ // Tanah
+ for(let p of platforms){
+
+  ctx.fillStyle="#9b572c";
+  ctx.fillRect(p.x,p.y,p.w,p.h);
+
+  ctx.fillStyle="#35c957";
+  ctx.fillRect(p.x,p.y,p.w,9);
+
+  ctx.fillStyle="#b97842";
+  for(let x=p.x+15;x<p.x+p.w;x+=35){
+   ctx.fillRect(x,p.y+18,15,7);
+  }
+ }
+
+ // Jebakan
+ for(let t of traps){
+
+  ctx.fillStyle="#db3333";
+  ctx.beginPath();
+  ctx.moveTo(t.x,t.y+t.h);
+  ctx.lineTo(t.x+t.w/2,t.y);
+  ctx.lineTo(t.x+t.w,t.y+t.h);
+  ctx.fill();
+ }
+
+ // Koin
+ for(let coin of coins){
+
+  if(coin.taken)continue;
+
+  ctx.fillStyle="#ffdc35";
+  ctx.beginPath();
+  ctx.ellipse(coin.x,coin.y,8,12,0,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.strokeStyle="#d68c00";
+  ctx.lineWidth=2;
+  ctx.stroke();
+ }
+
+ // Finish
+ ctx.fillStyle="#eeeeee";
+ ctx.fillRect(goal,190,7,180);
+
+ ctx.fillStyle="#ff3434";
+ ctx.fillRect(goal+7,190,65,35);
+
+ ctx.fillStyle="white";
+ ctx.font="bold 16px Arial";
+ ctx.fillText("FINISH",goal-20,175);
+
+ // Karakter original
+ ctx.fillStyle="#e83d3d";
+ ctx.fillRect(player.x+3,player.y+13,24,25);
+
+ ctx.fillStyle="#ffd0a0";
+ ctx.fillRect(player.x+5,player.y,22,20);
+
+ // Topi
+ ctx.fillStyle="#d92727";
+ ctx.fillRect(player.x+2,player.y,28,9);
+
+ // Mata
+ ctx.fillStyle="#222";
+ ctx.fillRect(player.x+20,player.y+8,4,4);
+
+ // Kaki
+ ctx.fillStyle="#59341f";
+ ctx.fillRect(player.x+3,player.y+35,10,7);
+ ctx.fillRect(player.x+18,player.y+35,10,7);
+
+ // Partikel
+ for(let p of particles){
+  ctx.fillStyle=p.color;
+  ctx.fillRect(p.x,p.y,6,6);
+ }
+
+ ctx.restore();
+
+ // HUD
+ ctx.fillStyle="white";
+ ctx.font="bold 20px Arial";
+ ctx.fillText("WORLD 1-"+level,20,30);
+}
+
+function loop(){
+ update();
+ draw();
+ requestAnimationFrame(loop);
+}
+
+// Kontrol HP
+function control(id,key){
+ const b=document.getElementById(id);
+
+ b.addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  audioStart();
+  keys[key]=true;
+ });
+
+ ["pointerup","pointerleave","pointercancel"].forEach(ev=>{
+  b.addEventListener(ev,()=>keys[key]=false);
+ });
+}
+
+control("left","left");
+control("right","right");
+control("jump","jump");
+
+document.addEventListener("keydown",e=>{
+ if(["ArrowLeft","ArrowRight","ArrowUp"," "].includes(e.key))
+ e.preventDefault();
+
+ if(e.key==="ArrowLeft")keys.left=true;
+ if(e.key==="ArrowRight")keys.right=true;
+ if(e.key==="ArrowUp"||e.key===" ")keys.jump=true;
+});
+
+document.addEventListener("keyup",e=>{
+ if(e.key==="ArrowLeft")keys.left=false;
+ if(e.key==="ArrowRight")keys.right=false;
+ if(e.key==="ArrowUp"||e.key===" ")keys.jump=false;
+});
+
+document.getElementById("sound").onclick=()=>{
+ soundOn=!soundOn;
+ document.getElementById("sound").innerText=
+ soundOn?"🔊 SUARA: ON":"🔇 SUARA: OFF";
+ if(soundOn)audioStart();
+};
+
+makeLevel();
+loop();
+</script>
+
+</body>
+</html>
